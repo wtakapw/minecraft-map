@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マイクラ座標メモMAP</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #808080; /* MAP以外の背景をグレーに変更 */
+            color: #333333;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        /* メインコンテンツエリア */
+        #main-content {
+            display: flex;
+            flex: 1;
+            width: 100%;
+            position: relative;
+        }
+        /* マップエリア */
+        #map-wrapper {
+            flex: 1;
+            position: relative;
+            background-color: #808080; /* マップのまわりの背景 */
+            overflow: hidden;
+            cursor: grab;
+        }
+        #map-wrapper:active {
+            cursor: grabbing;
+        }
+        #map {
+            width: 3000px;
+            height: 3000px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: #ffffff; /* マップ自体の背景は白 */
+            /* 100ごとにグリッドを表示 */
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.12) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.12) 1px, transparent 1px);
+            background-size: 100px 100px;
+            transform-origin: 0 0;
+            /* マップの端がわかるように太めの枠線を追加 */
+            border: 4px solid #333333;
+            box-sizing: border-box;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        /* 十字の原点ライン */
+        #axis-x {
+            position: absolute;
+            top: 1500px; left: 0; right: 0;
+            height: 2px; background-color: rgba(0,0,0,0.4);
+            z-index: 2;
+        }
+        #axis-z {
+            position: absolute;
+            left: 1500px; top: 0; bottom: 0;
+            width: 2px; background-color: rgba(0,0,0,0.4);
+            z-index: 2;
+        }
+        /* 上部フィルターバー */
+        #filter-bar {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 6px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 100;
+            border: 1px solid #ccc;
+            flex-wrap: wrap;
+            max-width: 700px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        .filter-btn {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid #333;
+            cursor: pointer;
+            opacity: 1;
+            transition: 0.2s;
+            box-shadow: 0 0 4px rgba(0,0,0,0.2);
+        }
+        .filter-btn.inactive {
+            opacity: 0.3;
+            border-color: #aaa;
+        }
+
+        /* 右側フォーム */
+        #sidebar {
+            width: 320px;
+            background-color: #f9f9f9;
+            border-left: 2px solid #ddd;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            z-index: 101;
+        }
+        h3 { margin: 0; font-size: 18px; border-bottom: 1px solid #ddd; padding-bottom: 5px; color: #111; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 13px; color: #555; }
+        input[type="number"], input[type="text"] {
+            background: #ffffff;
+            border: 1px solid #ccc;
+            color: #333;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            width: 100%;
+        }
+        /* カラー選択パレット */
+        .color-palette {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+        }
+        .color-option {
+            width: 100%;
+            height: 32px;
+            border-radius: 4px;
+            border: 2px solid #ccc;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        .color-option.selected {
+            border-color: #000;
+            transform: scale(1.1);
+            box-shadow: 0 0 8px rgba(0,0,0,0.3);
+        }
+        button:not(.zoom-btn) {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 15px;
+        }
+        button:not(.zoom-btn):hover { background-color: #45a049; }
+        #share-btn {
+            background-color: #2196F3;
+        }
+        #share-btn:hover { background-color: #0b7dda; }
+
+        /* マップ拡大縮小コントロール（サイドバー内） */
+        .zoom-container {
+            display: flex;
+            gap: 10px;
+        }
+        .zoom-btn {
+            flex: 1;
+            background: #e0e0e0;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .zoom-btn:hover {
+            background: #d0d0d0;
+        }
+
+        /* マーカーとポップアップ */
+        .marker {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 6px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        .marker.hidden {
+            display: none;
+        }
+        .marker .popup {
+            display: block;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0,0,0,0.85);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-content">
+        <!-- マップ表示 -->
+        <div id="map-wrapper">
+            <!-- 上部：色のオンオフフィルター -->
+            <div id="filter-bar" title="クリックで表示/非表示を切り替え">
+                <span style="font-size: 12px; color: #555; margin-right: 4px;">表示:</span>
+            </div>
+
+            <div id="map">
+                <div id="axis-x"></div>
+                <div id="axis-z"></div>
+            </div>
+        </div>
+
+        <!-- 右側入力サイドバー -->
+        <div id="sidebar">
+            <h3>マップ操作</h3>
+            <div class="input-group">
+                <label>拡大・縮小</label>
+                <div class="zoom-container">
+                    <button class="zoom-btn" onclick="zoomOut()" title="縮小">−</button>
+                    <button class="zoom-btn" onclick="zoomIn()" title="拡大">＋</button>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 10px;">座標を登録</h3>
+            
+            <div class="input-group">
+                <label>X座標 (-3000 ～ 3000)</label>
+                <input type="number" id="input-x" min="-3000" max="3000" value="0">
+            </div>
+            
+            <div class="input-group">
+                <label>Z座標 (-3000 ～ 3000)</label>
+                <input type="number" id="input-z" min="-3000" max="3000" value="0">
+            </div>
+            
+            <div class="input-group">
+                <label>色を選択</label>
+                <div class="color-palette" id="color-palette"></div>
+            </div>
+            
+            <div class="input-group">
+                <label>メモ (最大20文字)</label>
+                <input type="text" id="input-memo" maxlength="20" placeholder="拠点の名前など">
+            </div>
+            
+            <button id="submit-btn" onclick="addMarker()">マップに登録</button>
+            <button id="share-btn" onclick="shareMapUrl()">共有用URLをコピー</button>
+        </div>
+    </div>
+
+    <script>
+        const colors = [
+            "#000000", "#FF0000", "#0000FF", "#FFFF00", "#008000",
+            "#6A0DAD", "#FFC0CB", "#87CEEB", "#223A70", "#FF8000"
+        ];
+        
+        let selectedColor = colors[1];
+        let markersData = [];
+        let activeFilters = {};
+        
+        let currentScale = 1.0;
+        let mapX = 0;
+        let mapY = 0;
+
+        let isDragging = false;
+        let startX, startY;
+
+        window.onload = function() {
+            const wrapper = document.getElementById('map-wrapper');
+            if(wrapper) {
+                mapX = (wrapper.clientWidth / 2) - (1500 * currentScale);
+                mapY = (wrapper.clientHeight / 2) - (1500 * currentScale);
+                updateMapTransform();
+            }
+
+            initColorPalette();
+            initFilterBar();
+            loadMarkersFromUrl();
+            initMapControls();
+        };
+
+        function initMapControls() {
+            const wrapper = document.getElementById('map-wrapper');
+
+            wrapper.addEventListener('mousedown', (e) => {
+                if (e.target.closest('#sidebar') || e.target.closest('#filter-bar')) return;
+                isDragging = true;
+                startX = e.clientX - mapX;
+                startY = e.clientY - mapY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                mapX = e.clientX - startX;
+                mapY = e.clientY - startY;
+                updateMapTransform();
+            });
+
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            wrapper.addEventListener('wheel', (e) => {
+                if (e.target.closest('#sidebar')) return;
+                e.preventDefault();
+
+                const zoomIntensity = 0.15;
+                let oldScale = currentScale;
+
+                if (e.deltaY < 0) {
+                    currentScale = Math.min(currentScale + zoomIntensity, 3.0);
+                } else {
+                    currentScale = Math.max(currentScale - zoomIntensity, 0.3);
+                }
+
+                const rect = wrapper.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                mapX = mouseX - (mouseX - mapX) * (currentScale / oldScale);
+                mapY = mouseY - (mouseY - mapY) * (currentScale / oldScale);
+
+                updateMapTransform();
+            }, { passive: false });
+        }
+
+        function zoomIn() {
+            const wrapper = document.getElementById('map-wrapper');
+            let oldScale = currentScale;
+            currentScale = Math.min(currentScale + 0.25, 3.0);
+            
+            const cx = wrapper.clientWidth / 2;
+            const cy = wrapper.clientHeight / 2;
+            mapX = cx - (cx - mapX) * (currentScale / oldScale);
+            mapY = cy - (cy - mapY) * (currentScale / oldScale);
+            
+            updateMapTransform();
+        }
+
+        function zoomOut() {
+            const wrapper = document.getElementById('map-wrapper');
+            let oldScale = currentScale;
+            currentScale = Math.max(currentScale - 0.25, 0.3);
+            
+            const cx = wrapper.clientWidth / 2;
+            const cy = wrapper.clientHeight / 2;
+            mapX = cx - (cx - mapX) * (currentScale / oldScale);
+            mapY = cy - (cy - mapY) * (currentScale / oldScale);
+            
+            updateMapTransform();
+        }
+
+        function updateMapTransform() {
+            const map = document.getElementById('map');
+            if (map) {
+                map.style.transform = `translate(${mapX}px, ${mapY}px) scale(${currentScale})`;
+            }
+        }
+
+        function initColorPalette() {
+            const palette = document.getElementById('color-palette');
+            colors.forEach((col) => {
+                const btn = document.createElement('div');
+                btn.className = 'color-option' + (col === selectedColor ? ' selected' : '');
+                btn.style.backgroundColor = col;
+                btn.onclick = () => {
+                    document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedColor = col;
+                };
+                palette.appendChild(btn);
+            });
+        }
+
+        function initFilterBar() {
+            const filterBar = document.getElementById('filter-bar');
+            colors.forEach(col => {
+                activeFilters[col] = true;
+
+                const filterBtn = document.createElement('div');
+                filterBtn.className = 'filter-btn';
+                filterBtn.style.backgroundColor = col;
+                filterBtn.title = col;
+                filterBtn.onclick = () => {
+                    activeFilters[col] = !activeFilters[col];
+                    if (activeFilters[col]) {
+                        filterBtn.classList.remove('inactive');
+                    } else {
+                        filterBtn.classList.add('inactive');
+                    }
+                    applyFilters();
+                };
+                filterBar.appendChild(filterBtn);
+            });
+        }
+
+        function addMarker() {
+            const xInput = document.getElementById('input-x');
+            const zInput = document.getElementById('input-z');
+            const memoInput = document.getElementById('input-memo');
+
+            const x = parseInt(xInput.value);
+            const z = parseInt(zInput.value);
+            const memo = memoInput.value.trim() || "メモなし";
+
+            if (isNaN(x) || x < -3000 || x > 3000 || isNaN(z) || z < -3000 || z > 3000) {
+                alert("座標は -3000 から 3000 の間で入力してください。");
+                return;
+            }
+
+            markersData.push({ x: x, z: z, color: selectedColor, memo: memo });
+            renderMarkers();
+            memoInput.value = "";
+        }
+
+        function renderMarkers() {
+            document.querySelectorAll('.marker').forEach(el => el.remove());
+            const mapNode = document.getElementById('map');
+
+            markersData.forEach((item, index) => {
+                const pixelX = ((item.x + 3000) / 6000) * 3000;
+                const pixelZ = ((item.z + 3000) / 6000) * 3000;
+
+                const markerEl = document.createElement('div');
+                markerEl.className = 'marker';
+                markerEl.style.left = pixelX + 'px';
+                markerEl.style.top = pixelZ + 'px';
+                markerEl.style.backgroundColor = item.color;
+                markerEl.setAttribute('data-color', item.color);
+
+                markerEl.onclick = (e) => {
+                    e.stopPropagation();
+                    if(confirm(`「${item.memo} (${item.x}, ${item.z})」を削除しますか？`)) {
+                        markersData.splice(index, 1);
+                        renderMarkers();
+                    }
+                };
+
+                const popup = document.createElement('div');
+                popup.className = 'popup';
+                popup.innerHTML = '<strong>' + escapeHtml(item.memo) + '</strong> (' + item.x + ', ' + item.z + ')';
+                
+                markerEl.appendChild(popup);
+                mapNode.appendChild(markerEl);
+            });
+
+            applyFilters();
+        }
+
+        function applyFilters() {
+            document.querySelectorAll('.marker').forEach(marker => {
+                const col = marker.getAttribute('data-color');
+                if (activeFilters[col]) {
+                    marker.classList.remove('hidden');
+                } else {
+                    marker.classList.add('hidden');
+                }
+            });
+        }
+
+        function shareMapUrl() {
+            if (markersData.length === 0) {
+                alert("共有する座標が登録されていません。");
+                return;
+            }
+
+            const jsonStr = JSON.stringify(markersData);
+            const encoded = encodeURIComponent(jsonStr);
+            const shareUrl = window.location.origin + window.location.pathname + '?data=' + encoded;
+
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                alert("共有用URLをクリップボードにコピーしました！");
+            }).catch(err => {
+                prompt("以下のURLをコピーしてください：", shareUrl);
+            });
+        }
+
+        function loadMarkersFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const dataParam = params.get('data');
+            if (dataParam) {
+                try {
+                    const decoded = decodeURIComponent(dataParam);
+                    markersData = JSON.parse(decoded);
+                    renderMarkers();
+                } catch(e) {
+                    console.error("URLデータの読み込みに失敗しました", e);
+                }
+            }
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&'`"<>]/g, function(match) {
+                return {
+                    '&': '&amp;',
+                    "'": '&#x27;',
+                    '`': '&#x60;',
+                    '"': '&quot;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                }[match];
+            });
+        }
+    </script>
+</body>
+</html>
